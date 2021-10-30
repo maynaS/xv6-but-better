@@ -150,7 +150,7 @@ kerneltrap()
     panic("kerneltrap");
   }
   // give up the CPU if this is a timer interrupt.
-  #if SCHEDULER != SCHED_FCFS
+  #if SCHEDULER != SCHED_FCFS && SCHEDULER != SCHED_PBS
     if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
     yield();
   #endif

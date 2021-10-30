@@ -131,10 +131,14 @@ sys_trace(void)
 uint64
 sys_setpriority(void)
 {
-  int newpriority;
+  int newpriority,newpid;
   if (argint(0,&newpriority)<0)
   {
     return -1;
   }
-  return setpriority(newpriority);
+  if (argint(1,&newpid)<0)
+  {
+    return -1;
+  }
+  return setpriority(newpriority,newpid);
 }

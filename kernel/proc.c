@@ -52,7 +52,7 @@ int setpriority(int newpriority, int pd)
     return -1;
   }
 
-  int old_priority;
+  int old_priority = 0;
   struct proc *p = (struct proc *)0;
   for (p = proc; p < &proc[NPROC]; p++)
   {
@@ -574,7 +574,7 @@ void scheduler(void)
   c->proc = 0;
 #if SCHEDULER == SCHED_FCFS
 
-  while (1)
+  for (;;)
   {
     // Enable interrupts on this processor - yielding disabled for FCFS
     // printf("FCFS\n");
@@ -582,7 +582,7 @@ void scheduler(void)
     for (p = proc; p < &proc[NPROC]; p++)
     {
       acquire(&p->lock);
-      if (p->state == RUNNABLE)
+      if (p->state == RUNNABLE )
       {
         struct proc *selected_proc = p;
         struct proc *next;
