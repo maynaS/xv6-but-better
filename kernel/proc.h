@@ -116,9 +116,10 @@ struct proc {
   uint end_time;
   uint run_time;
   uint num_runs;
+  uint last_scheduled_time;
+  uint newrun;
+  uint newsleep;
   uint wait_time;
   uint static_priority;
-  uint dynamic_priority;
-  uint niceness; 
   uint timeslices;
 };

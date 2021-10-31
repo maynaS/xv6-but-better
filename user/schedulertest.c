@@ -61,20 +61,20 @@ int main() {
       if (pid < 0)
           break;
       if (pid == 0) {
-#if SCHEDULER != SCHED_FCFS
-          printf("bruh\n");
+#ifndef FCFS
+        //   printf("bruh\n");
           if (n < IO) {
             sleep(200); // IO bound processes
           } else {
 #endif
             for (volatile int i = 0; i < 1000000000; i++) {} // CPU bound process 
-#if SCHEDULER != SCHED_FCFS
+#ifndef FCFS
           }
 #endif
-          //printf("Process %d finished", n);
+          printf("Process %d finished", n);
           exit(0);
       } else {
-#if SCHEDULER != SCHED_PBS
+#ifdef PBS
         setpriority(80, pid); // Will only matter for PBS, set lower priority for IO bound processes 
 #endif
       }

@@ -5,6 +5,10 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include <stddef.h>
+
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 struct cpu cpus[NCPU];
 
@@ -35,10 +39,11 @@ void inc_runtime()
     if (p->state == RUNNING)
     {
       p->run_time++;
+      p->newrun++;
     }
-    if (p->state == SLEEPING || p->state == RUNNABLE)
+    if (p->state == SLEEPING)
     {
-      p->wait_time++;
+      p->newsleep++;      
     }
     
     release(&p->lock);
@@ -52,22 +57,19 @@ int setpriority(int newpriority, int pd)
     return -1;
   }
 
-  int old_priority = 0;
+  int old_priority = 0,newpri = 0;
   struct proc *p = (struct proc *)0;
   for (p = proc; p < &proc[NPROC]; p++)
   {
     acquire(&p->lock);
     if (p->pid == pd)
     {
-      old_priority = p->static_priority;
+      old_priority = dyn_priority(p);
       p->static_priority = newpriority;
-      if (newpriority != old_priority)
+      newpri = dyn_priority(p);
+      if (newpri < old_priority)
       {
-        p->timeslices = 0;
-        if (newpriority != old_priority)
-        {
-          yield();
-        }
+        yield();
       }
     }
     release(&p->lock);
@@ -179,9 +181,8 @@ found:
   p->run_time = 0;
   p->end_time = 0;
   p->static_priority = 60;
+  p->num_runs = 0;
   p->timeslices = 0;
-  p->niceness = 5;
-  p->dynamic_priority = 60;
 
   // Allocate a trapframe page.
   if ((p->trapframe = (struct trapframe *)kalloc()) == 0)
@@ -559,6 +560,21 @@ int waitx(uint64 addr, uint *rtime, uint *wtime)
   }
 }
 
+int dyn_priority(struct proc* p)
+{
+  int niceness = 5;
+  if (p->last_scheduled_time!=0 && p->num_runs!=0)
+  {
+    int denom = p->newrun+p->newsleep;
+    int numer = p->newsleep;
+    if (denom!=0)
+    {
+      niceness = (int)((float)(numer/denom)*10);
+    }
+  }
+  return MAX(0,MIN(p->static_priority - niceness + 5, 100));
+}
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -574,40 +590,38 @@ void scheduler(void)
   c->proc = 0;
 #if SCHEDULER == SCHED_FCFS
 
-  for (;;)
+  while (1)
   {
     // Enable interrupts on this processor - yielding disabled for FCFS
     // printf("FCFS\n");
     intr_on();
+    struct proc *selected_proc = NULL;
     for (p = proc; p < &proc[NPROC]; p++)
     {
       acquire(&p->lock);
-      if (p->state == RUNNABLE )
+      if (p->state == RUNNABLE)
       {
-        struct proc *selected_proc = p;
-        struct proc *next;
-        for (next = proc; next < &proc[NPROC]; next++)
+        if (selected_proc == NULL)
         {
-          if (next->state != RUNNABLE)
-          {
-            continue;
-          }
-          if (next->pid <= 2)
-          {
-            continue;
-          }
-          if (next->start_time < p->start_time)
-          {
-            selected_proc = next;
-          }
+          selected_proc = p;
+          continue;
         }
-        p = selected_proc;
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-        c->proc = 0;
+        if (selected_proc->start_time > p->start_time)
+        {
+          release(&selected_proc->lock);
+          selected_proc = p;
+          continue;
+        }
       }
       release(&p->lock);
+    }
+    if (selected_proc != NULL)
+    {
+      selected_proc->state = RUNNING;
+      c->proc = selected_proc;
+      swtch(&c->context, &selected_proc->context);
+      c->proc = 0;
+      release(&selected_proc->lock);
     }
   }
 #elif SCHEDULER == SCHED_PBS
@@ -616,52 +630,52 @@ void scheduler(void)
   {
     printf("PBS\n");
     intr_on();
-    int minprio = 101;
-    for (p = proc; p < &proc[NPROC]; p++)
-    {
-      // acquire(&p->lock);
-      if (p->state == RUNNABLE)
-      {
-        if (p->dynamic_priority < minprio)
-        {
-          minprio = p->dynamic_priority;
-        } 
-      }
-      // release(&p->lock);
-    }
+    struct proc* selected_proc = NULL;
     for (p = proc; p < &proc[NPROC]; p++)
     {
       acquire(&p->lock);
-      if (p->state == RUNNABLE)
+      if (p->state==RUNNABLE)
       {
-        if (p->dynamic_priority == minprio)
+        if (selected_proc==NULL)
         {
-          struct proc *alottedP = p;
-          c->proc = allotedP;
-          alottedP->state = RUNNING;
-          swtch(&c->context, &alottedP->context);
-          c->proc = 0;
-          int minprio2 = 101;
-          for (struct proc* pp = proc; pp < &proc[NPROC]; pp++)
-          {
-            // acquire(&p->lock);
-            if (pp->state == RUNNABLE)
-            {
-              if (pp->dynamic_priority < minprio2)
-              {
-                minprio2 = p->dynamic_priority;
-              } 
-            }
-            // release(&p->lock);
+          selected_proc = p;
+        }
+        else
+        {
+          if(dyn_priority(p) < dyn_priority(selected_proc)) 
+          {        
+            selected_proc = p;
           }
-          if (minprio2<minprio)
+          else if(dyn_priority(p) == dyn_priority(selected_proc) && p->num_runs > selected_proc->num_runs) 
           {
-            break;
+            selected_proc = p;
           }
-        }    
+          else if(dyn_priority(selected_proc) == dyn_priority(p) && p->num_runs == selected_proc->num_runs && selected_proc->start_time > p->start_time) 
+          {
+            selected_proc = p;
+          }
+        }
+        
       }
       release(&p->lock);
     }
+    if (selected_proc==NULL)
+    {
+      continue;
+    }
+    acquire(&selected_proc->lock);
+    if (selected_proc->state==RUNNABLE)
+    {
+      selected_proc->num_runs++;
+      selected_proc->newrun = 0;
+      selected_proc->newsleep = 0;
+      selected_proc->last_scheduled_time = ticks;
+      c->proc = selected_proc;
+      selected_proc->state = RUNNING;
+      swtch(&c->context, &selected_proc->context);
+      c->proc = 0;
+    }
+    release(&selected_proc->lock);
   }
   
 
