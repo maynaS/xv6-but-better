@@ -41,10 +41,10 @@ void inc_runtime()
       p->run_time++;
       p->newrun++;
     }
-    if (p->state == SLEEPING)
-    {
-      p->newsleep++;      
-    }
+    // if (p->state == SLEEPING)
+    // {
+    //   p->newsleep++;      
+    // }
     
     release(&p->lock);
   }
@@ -171,6 +171,7 @@ allocproc(void)
       release(&p->lock);
     }
   }
+
   return 0;
 
 found:
@@ -569,7 +570,7 @@ int dyn_priority(struct proc* p)
     int numer = p->newsleep;
     if (denom!=0)
     {
-      niceness = (int)((float)(numer/denom)*10);
+      niceness = ((numer*10/denom));
     }
   }
   return MAX(0,MIN(p->static_priority - niceness + 5, 100));
@@ -598,31 +599,57 @@ void scheduler(void)
     struct proc *selected_proc = NULL;
     for (p = proc; p < &proc[NPROC]; p++)
     {
-      acquire(&p->lock);
-      if (p->state == RUNNABLE)
+      if (p->state!=RUNNABLE)
       {
-        if (selected_proc == NULL)
-        {
-          selected_proc = p;
-          continue;
-        }
-        if (selected_proc->start_time > p->start_time)
-        {
-          release(&selected_proc->lock);
-          selected_proc = p;
-          continue;
-        }
+        continue;
       }
-      release(&p->lock);
+      if (selected_proc == NULL)
+      {
+        selected_proc = p;
+      }
+      if (selected_proc->start_time > p->start_time)
+      {
+        selected_proc = p;
+      }
+      // acquire(&p->lock);
+      // if (p->state == RUNNABLE)
+      // {
+      //   if (selected_proc == NULL)
+      //   {
+      //     selected_proc = p;
+      //     continue;
+      //   }
+      //   if (selected_proc->start_time > p->start_time)
+      //   {
+      //     release(&selected_proc->lock);
+      //     selected_proc = p;
+      //     continue;
+      //   }
+      // }
+      // release(&p->lock);
     }
-    if (selected_proc != NULL)
+    if (selected_proc==NULL)
+    {
+      continue;
+    }
+    acquire(&selected_proc->lock);
+    if (selected_proc->state==RUNNABLE)
     {
       selected_proc->state = RUNNING;
       c->proc = selected_proc;
       swtch(&c->context, &selected_proc->context);
       c->proc = 0;
-      release(&selected_proc->lock);
+      
     }
+    release(&selected_proc->lock);
+    // if (selected_proc != NULL)
+    // {
+    //   selected_proc->state = RUNNING;
+    //   c->proc = selected_proc;
+    //   swtch(&c->context, &selected_proc->context);
+    //   c->proc = 0;
+    //   release(&selected_proc->lock);
+    // }
   }
 #elif SCHEDULER == SCHED_PBS
 
@@ -677,8 +704,6 @@ void scheduler(void)
     }
     release(&selected_proc->lock);
   }
-  
-
 #else
   for (;;)
   {
@@ -784,6 +809,7 @@ void sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
+  p->sleep_last = ticks;
 
   sched();
 
@@ -808,6 +834,7 @@ void wakeup(void *chan)
       acquire(&p->lock);
       if (p->state == SLEEPING && p->chan == chan)
       {
+        p->newsleep = p->newsleep + (ticks-p->sleep_last);
         p->state = RUNNABLE;
       }
       release(&p->lock);
@@ -890,6 +917,7 @@ void procdump(void)
   char *state;
 
   printf("\n");
+  printf("PID\tPriority\tState\trtime\twtime\tnrun\n");
   for (p = proc; p < &proc[NPROC]; p++)
   {
     if (p->state == UNUSED)
@@ -898,7 +926,13 @@ void procdump(void)
       state = states[p->state];
     else
       state = "???";
+    #if SCHEDULER == SCHED_PBS
+    printf("%d\t%d\t\t%s\t%d\t%d\t%d\n", p->pid, dyn_priority(p), state, p->run_time, ticks - p->run_time - p->start_time, p->num_runs);
+    #endif  //PBS
+    #if SCHEDULER != SCHED_PBS
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
+    #endif  //!PBS
+    
   }
 }
