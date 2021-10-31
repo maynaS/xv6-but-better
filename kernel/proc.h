@@ -123,3 +123,23 @@ struct proc {
   uint static_priority;
   uint timeslices;
 };
+
+
+// struct Queue {
+//   int head, tail;
+//   struct proc *array[NPROC + 1];
+//   int size;
+// };
+
+// void push(struct Queue *list, struct proc *element);
+
+// void pop(struct Queue *list);
+
+// struct proc *front(struct Queue *list);
+
+// void qerase(struct Queue *list, int pid);
+
+// struct Queue mlfq[NMLFQ];
+
+// void ageing(void);
+

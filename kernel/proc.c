@@ -506,7 +506,7 @@ int wait(uint64 addr)
   }
 }
 
-int waitx(uint64 addr, uint *rtime, uint *wtime)
+int waitx(uint64 addr, uint *wtime, uint *rtime)
 {
   struct proc *np;
   int havekids, pid;
@@ -628,7 +628,7 @@ void scheduler(void)
 
   while (1)
   {
-    printf("PBS\n");
+    // printf("PBS\n");
     intr_on();
     struct proc* selected_proc = NULL;
     for (p = proc; p < &proc[NPROC]; p++)
