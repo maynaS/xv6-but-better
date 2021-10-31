@@ -49,7 +49,7 @@ Ctrl-A + x
 
 ##### 3. `setpriority Syscall`
 
-##### 5. `schedulertest Syscall`
+##### 4. `schedulertest Syscall`
 
 #### New CPU Schedulers:
 
@@ -152,7 +152,7 @@ Following is the tabulation for comparison of different schedulers using the giv
 
 ### Comparision
 
-| Scheduler | Avg wtime (on my processor) | Avg rtime (on my processor) |
+| Scheduler | Avg rtime (on my processor) | Avg wtime (on my processor) |
 | --------- | --------------------------- | --------------------------- |
 | RR        | 24                          | 122                         |
 | FCFS      | 21                          | 118                         |
